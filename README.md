@@ -26,6 +26,9 @@ if error: к-ON-500-OFFF {3}
     if АКБ<12.3:
 		 к-ON-2000-OFF-ON-2000-OFF
  	 	 з-OFF
+ 	 	 
+POMP:
+ if off: rled-on-500-off-500-on-500-off-500
 ```
 Данные K-Line брались с расшифровки (см. файл webasto-wbus.txt)
  
