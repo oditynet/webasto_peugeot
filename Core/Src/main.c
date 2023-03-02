@@ -2,12 +2,17 @@
 #include "cmsis_os.h"
 UART_HandleTypeDef huart1;
 osThreadId_t defaultTaskHandle;
+osThreadId_t defaultTaskHandle1;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
-
+const osThreadAttr_t defaultTask_attributes1 = {
+  .name = "defaultTask1",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 enum eWTT_State {
 		WTT_POWER_DOWN,
 		WTT_GET_PARAM,
@@ -72,6 +77,34 @@ void info_led_light(uint32_t sec)
 	//HAL_GPIO_WritePin(led_on_off_GPIO_Port, led_on_off_Pin, GPIO_PIN_SET);
 	HAL_GPIO_WritePin(led_info_GPIO_Port, led_info_Pin, GPIO_PIN_SET);
 }
+void rele_func()
+{
+	for(;;)
+	  {
+		if(WEBASTO_WORK_PARAM.WorkStatus == 1)
+		{
+			HAL_GPIO_WritePin(rele_pomp_GPIO_Port, rele_pomp_Pin, GPIO_PIN_SET); //rele on
+		}
+		else if (WTT_State == WTT_STOPHEATER)
+		{
+
+			osDelay(500);
+			HAL_GPIO_WritePin(led_on_off_GPIO_Port, led_on_off_Pin, GPIO_PIN_SET); //led on
+			osDelay(500);
+			HAL_GPIO_WritePin(led_on_off_GPIO_Port, led_on_off_Pin, GPIO_PIN_RESET); //led on
+			osDelay(500);
+			HAL_GPIO_WritePin(led_on_off_GPIO_Port, led_on_off_Pin, GPIO_PIN_SET); //led on
+			osDelay(500);
+			HAL_GPIO_WritePin(led_on_off_GPIO_Port, led_on_off_Pin, GPIO_PIN_RESET); //led on
+			osDelay(500);
+			for (int i = 0; i < 60; ++i) {
+				osDelay(1000);
+			}
+			HAL_GPIO_WritePin(rele_pomp_GPIO_Port, rele_pomp_Pin, GPIO_PIN_RESET); //rele on
+		}
+		osDelay(100);
+	  }
+}
 void WEBASTO_Proc() {
 
 		const char WB_GET_PARAM[] =  {0x24,0x05,0x50,0x30,0x0c,0x0e,0x43}; // ack 42 08 d0 30 0c 2e 0e 30 52 e4
@@ -99,7 +132,7 @@ void WEBASTO_Proc() {
 						if((button_press() == 1 || button_press() == 2) && WEBASTO_WORK_PARAM.WorkStatus==0)
 						{
 							WTT_Change_state(WTT_POWER_WAKEUP);
-							info_led_light(100);
+							info_led_light(300);
 							//HAL_GPIO_WritePin(led_on_off_GPIO_Port, led_on_off_Pin, GPIO_PIN_RESET);
 							//osDelay(300);
 							//HAL_GPIO_WritePin(led_on_off_GPIO_Port, led_on_off_Pin, GPIO_PIN_SET);
@@ -121,6 +154,8 @@ void WEBASTO_Proc() {
 								WTT_Change_state(WTT_POWER_DOWN);
 								info_led_light(100);
 								info_led_light(500);
+								//HAL_GPIO_WritePin(led_on_off_GPIO_Port, led_on_off_Pin, GPIO_PIN_SET);
+								//osDelay(1000);
 								//HAL_GPIO_WritePin(led_on_off_GPIO_Port, led_on_off_Pin, GPIO_PIN_SET); //led off
 								}
 						else {
@@ -128,8 +163,8 @@ void WEBASTO_Proc() {
 								if(WBUS_ACK_EXT[WB_Ucode_SHIFT]==0x0e) WEBASTO_WORK_PARAM.CurrUakb = (uint16_t) ((WBUS_ACK_EXT[WB_Uvalue_SHIFT]<<8) | WBUS_ACK_EXT[WB_Uvalue_SHIFT+1]);
 								if(WEBASTO_WORK_PARAM.WorkStatus==0) {
 										WTT_Change_state(WTT_START_HEATER);
-										HAL_GPIO_WritePin(led_on_off_GPIO_Port, led_on_off_Pin, GPIO_PIN_RESET); //led on
-										HAL_GPIO_WritePin(rele_pomp_GPIO_Port, rele_pomp_Pin, GPIO_PIN_RESET); //rele on
+										HAL_GPIO_WritePin(led_on_off_GPIO_Port, led_on_off_Pin, GPIO_PIN_SET); //led on
+										//HAL_GPIO_WritePin(rele_pomp_GPIO_Port, rele_pomp_Pin, GPIO_PIN_SET); //rele on
 										}
 								else if(WEBASTO_WORK_PARAM.WorkStatus==1) {
 										WTT_Change_state(WTT_SUPPORT_HEATER);
@@ -201,14 +236,14 @@ void WEBASTO_Proc() {
 
 				case (WTT_STOPHEATER): {
 					//TODO помпу надо дальше крутить!!!!!
-						HAL_GPIO_WritePin(rele_pomp_GPIO_Port, rele_pomp_Pin, GPIO_PIN_SET); //rele off
+						//HAL_GPIO_WritePin(rele_pomp_GPIO_Port, rele_pomp_Pin, GPIO_PIN_RESET); //rele off
 						osDelay(1000);
 						// Stop heater
 						ret_code = WBUS_TX((char*)WB_STOP_CMD,sizeof(WB_STOP_CMD),(char*)WB_STOP_CMD_ACK,sizeof(WB_STOP_CMD_ACK),3,500);
-						if(WEBASTO_WORK_PARAM.StopCMD==1) WEBASTO_WORK_PARAM.StopCMD=0;
+						//if(WEBASTO_WORK_PARAM.StopCMD==1) WEBASTO_WORK_PARAM.StopCMD=0;
 						WEBASTO_WORK_PARAM.WorkStatus=0;
 
-						HAL_GPIO_WritePin(led_on_off_GPIO_Port, led_on_off_Pin, GPIO_PIN_SET); //led off
+						HAL_GPIO_WritePin(led_on_off_GPIO_Port, led_on_off_Pin, GPIO_PIN_RESET); //led off
 
 						WTT_Change_state(WTT_POWER_DOWN);
 						}	break;
@@ -321,6 +356,7 @@ int main(void)
   MX_USART1_UART_Init();
   osKernelInitialize();
   defaultTaskHandle = osThreadNew(webasto_func, NULL, &defaultTask_attributes);
+  defaultTaskHandle1 = osThreadNew(rele_func, NULL, &defaultTask_attributes1);
   osKernelStart();
 
   while (1)
@@ -419,8 +455,8 @@ void webasto_func(void *argument)
   for(;;)
   {
 	  HAL_GPIO_WritePin(led_info_GPIO_Port, led_info_Pin, GPIO_PIN_SET);
-	  HAL_GPIO_WritePin(led_on_off_GPIO_Port, led_on_off_Pin, GPIO_PIN_SET);
-	  HAL_GPIO_WritePin(rele_pomp_GPIO_Port, rele_pomp_Pin, GPIO_PIN_SET); //rele off
+	  HAL_GPIO_WritePin(led_on_off_GPIO_Port, led_on_off_Pin, GPIO_PIN_RESET);
+	  HAL_GPIO_WritePin(rele_pomp_GPIO_Port, rele_pomp_Pin, GPIO_PIN_RESET); //rele off
 	WEBASTO_Proc();
     osDelay(1);
   }
